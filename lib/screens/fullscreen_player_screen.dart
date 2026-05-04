@@ -5,12 +5,6 @@ import 'package:video_player/video_player.dart';
 import '../models/video_item.dart';
 import '../core/theme/app_theme.dart';
 
-/// Full-screen video player that matches the design reference:
-/// - Portrait orientation, video fills screen with BoxFit.cover
-/// - "High-Density Masonry Video Tiles" title at top-left
-/// - Tap to toggle minimal play/pause controls
-/// - Progress bar at the bottom on tap
-/// - Safe disposal on exit
 class FullscreenPlayerScreen extends StatefulWidget {
   final VideoItem item;
   final Duration startPosition;
@@ -30,28 +24,41 @@ class FullscreenPlayerScreen extends StatefulWidget {
 class _FullscreenPlayerScreenState extends State<FullscreenPlayerScreen> {
   late VideoPlayerController _ctrl;
   bool _initialised = false;
-  bool _showControls = false; // hidden by default, tap to reveal
+  bool _disposed = false;
+  bool _showControls = false;
 
   @override
   void initState() {
     super.initState();
-    // Stay portrait — immersive with transparent bars
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _initController();
   }
 
   Future<void> _initController() async {
-    _ctrl = VideoPlayerController.asset(widget.item.assetPath);
-    await _ctrl.initialize();
-    _ctrl.setLooping(true);
-    await _ctrl.seekTo(widget.startPosition);
-    await _ctrl.play();
-    if (mounted) setState(() => _initialised = true);
+    try {
+      _ctrl = VideoPlayerController.asset(widget.item.assetPath);
+      await _ctrl.initialize();
+      if (_disposed) {
+        await _ctrl.dispose();
+        return;
+      }
+      _ctrl.setLooping(true);
+      await _ctrl.seekTo(widget.startPosition);
+      await _ctrl.play();
+      if (mounted && !_disposed) {
+        setState(() => _initialised = true);
+      }
+    } catch (_) {
+      if (!_disposed && mounted) {
+        setState(() => _initialised = false);
+      }
+    }
   }
 
   @override
   void dispose() {
+    _disposed = true;
     _ctrl.dispose();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
@@ -77,18 +84,19 @@ class _FullscreenPlayerScreenState extends State<FullscreenPlayerScreen> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // ── Full-cover video ─────────────────────────────────────────────
             Hero(
               tag: widget.heroTag,
               child: _initialised
-                  ? SizedBox.expand(
-                      child: FittedBox(
-                        fit: BoxFit.cover,
-                        alignment: Alignment.center,
-                        child: SizedBox(
-                          width: _ctrl.value.size.width,
-                          height: _ctrl.value.size.height,
-                          child: VideoPlayer(_ctrl),
+                  ? RepaintBoundary(
+                      child: SizedBox.expand(
+                        child: FittedBox(
+                          fit: BoxFit.cover,
+                          alignment: Alignment.center,
+                          child: SizedBox(
+                            width: _ctrl.value.size.width,
+                            height: _ctrl.value.size.height,
+                            child: VideoPlayer(_ctrl),
+                          ),
                         ),
                       ),
                     )
@@ -99,16 +107,12 @@ class _FullscreenPlayerScreenState extends State<FullscreenPlayerScreen> {
                       ),
                     ),
             ),
-
-            // ── Always-visible top title bar ─────────────────────────────────
             Positioned(
               top: 0,
               left: 0,
               right: 0,
               child: _buildTopBar(context),
             ),
-
-            // ── Tap-to-reveal controls overlay ───────────────────────────────
             AnimatedOpacity(
               opacity: _showControls ? 1.0 : 0.0,
               duration: const Duration(milliseconds: 220),
@@ -123,7 +127,6 @@ class _FullscreenPlayerScreenState extends State<FullscreenPlayerScreen> {
     );
   }
 
-  /// Top bar: back arrow + "High-Density Masonry Video Tiles" title
   Widget _buildTopBar(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
@@ -141,7 +144,6 @@ class _FullscreenPlayerScreenState extends State<FullscreenPlayerScreen> {
       ),
       child: Row(
         children: [
-          // Back button
           GestureDetector(
             onTap: () => Navigator.of(context).pop(),
             child: const Padding(
@@ -154,7 +156,6 @@ class _FullscreenPlayerScreenState extends State<FullscreenPlayerScreen> {
             ),
           ),
           const SizedBox(width: 4),
-          // Title matching reference exactly
           const Expanded(
             child: Text(
               textAlign: TextAlign.center,
@@ -174,15 +175,11 @@ class _FullscreenPlayerScreenState extends State<FullscreenPlayerScreen> {
     );
   }
 
-  /// Centre play/pause + bottom progress bar (visible only when tapped)
   Widget _buildControlsOverlay() {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Dim background
         Container(color: const Color(0x55000000)),
-
-        // Centre play/pause button
         Center(
           child: GestureDetector(
             onTap: _togglePlay,
@@ -208,8 +205,6 @@ class _FullscreenPlayerScreenState extends State<FullscreenPlayerScreen> {
             ),
           ),
         ),
-
-        // Bottom progress + time
         if (_initialised)
           Positioned(
             left: 0,
@@ -244,7 +239,6 @@ class _FullscreenPlayerScreenState extends State<FullscreenPlayerScreen> {
           return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Tile label
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -258,7 +252,6 @@ class _FullscreenPlayerScreenState extends State<FullscreenPlayerScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              // Slider
               SliderTheme(
                 data: SliderTheme.of(context).copyWith(
                   activeTrackColor: AppTheme.accentRed,
@@ -277,7 +270,6 @@ class _FullscreenPlayerScreenState extends State<FullscreenPlayerScreen> {
                       _ctrl.seekTo(Duration(milliseconds: v.toInt())),
                 ),
               ),
-              // Times
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
                 child: Row(

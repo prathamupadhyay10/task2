@@ -56,7 +56,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       child: Scaffold(
         backgroundColor: AppTheme.bgPrimary,
         body: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
+          cacheExtent: 2000,
           slivers: [
             SliverAppBar(
               pinned: true,

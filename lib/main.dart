@@ -12,7 +12,7 @@ void main() {
 
   // Global visibility detector update interval — reduces callback overhead
   VisibilityDetectorController.instance.updateInterval =
-      const Duration(milliseconds: 200);
+      const Duration(milliseconds: 100);
 
   // Lock to portrait for the wall; fullscreen unlocks landscape internally
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);

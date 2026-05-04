@@ -1,23 +1,15 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:video_player/video_player.dart';
 
 import '../core/constants/app_constants.dart';
 
-/// Shared controller pool for the masonry wall.
-///
-/// Rules:
-/// - Keep at most [kMaxActiveControllers] alive at once.
-/// - Only one tile plays at a time.
-/// - Evict the farthest tile first when the pool is full.
 class VideoControllerService extends ChangeNotifier {
   final Map<int, VideoPlayerController> _pool = {};
   final Map<int, VoidCallback> _pauseCallbacks = {};
-
-  int? _playingIndex;
+  final Set<int> _playingTiles = {};
   bool _foregrounded = true;
 
-  int? get playingIndex => _playingIndex;
+  Set<int> get playingTiles => _playingTiles;
   bool get foregrounded => _foregrounded;
   bool get hasCapacity => _pool.length < kMaxActiveControllers;
 
@@ -29,7 +21,7 @@ class VideoControllerService extends ChangeNotifier {
 
   Future<VideoPlayerController?> register(
     int index,
-    String assetPath,
+    String networkUrl,
     VoidCallback pauseCallback,
   ) async {
     if (_pool.containsKey(index)) {
@@ -41,15 +33,17 @@ class VideoControllerService extends ChangeNotifier {
       _evictFarthest(pivot: index);
     }
 
-    final controller = VideoPlayerController.asset(assetPath);
+    final controller = VideoPlayerController.asset(networkUrl);
     _pool[index] = controller;
     _pauseCallbacks[index] = pauseCallback;
 
     try {
       await controller.initialize();
       controller.setLooping(true);
+      debugPrint('✅ VideoControllerService: Initialized controller for index $index');
       return controller;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('❌ VideoControllerService: Failed to initialize index $index: $e');
       _pool.remove(index);
       _pauseCallbacks.remove(index);
       controller.dispose();
@@ -62,34 +56,25 @@ class VideoControllerService extends ChangeNotifier {
     final pauseCallback = _pauseCallbacks.remove(index);
 
     pauseCallback?.call();
+    _playingTiles.remove(index);
     _disposeAfterFrame(controller);
 
-    if (_playingIndex == index) {
-      _playingIndex = null;
-      notifyListeners();
-    }
+    notifyListeners();
   }
 
   Future<void> requestPlay(int index) async {
     if (!_foregrounded) return;
-    if (_playingIndex == index) return;
+    if (_playingTiles.contains(index)) return;
 
-    if (_playingIndex != null) {
-      _pauseCallbacks[_playingIndex]?.call();
-      _pool[_playingIndex]?.pause();
-    }
-
-    _playingIndex = index;
+    _playingTiles.add(index);
     await _pool[index]?.play();
     notifyListeners();
   }
 
   void pauseTile(int index) {
     _pool[index]?.pause();
-    if (_playingIndex == index) {
-      _playingIndex = null;
-      notifyListeners();
-    }
+    _playingTiles.remove(index);
+    notifyListeners();
   }
 
   void pauseAll() {
@@ -99,6 +84,7 @@ class VideoControllerService extends ChangeNotifier {
     for (final ctrl in _pool.values) {
       ctrl.pause();
     }
+    _playingTiles.clear();
     _foregrounded = false;
     notifyListeners();
   }
@@ -119,6 +105,7 @@ class VideoControllerService extends ChangeNotifier {
     var maxDistance = -1;
 
     for (final key in _pool.keys) {
+      if (_playingTiles.contains(key)) continue;
       final distance = (key - pivot).abs();
       if (distance > maxDistance) {
         maxDistance = distance;
@@ -126,18 +113,16 @@ class VideoControllerService extends ChangeNotifier {
       }
     }
 
-    if (victim == null) return;
+    victim ??= _pool.keys.first;
 
     final controller = _pool.remove(victim);
     final pauseCallback = _pauseCallbacks.remove(victim);
 
     pauseCallback?.call();
+    _playingTiles.remove(victim);
     _disposeAfterFrame(controller);
 
-    if (_playingIndex == victim) {
-      _playingIndex = null;
-      notifyListeners();
-    }
+    notifyListeners();
   }
 
   void _disposeAfterFrame(VideoPlayerController? controller) {
@@ -155,6 +140,7 @@ class VideoControllerService extends ChangeNotifier {
     }
     _pool.clear();
     _pauseCallbacks.clear();
+    _playingTiles.clear();
     super.dispose();
   }
 }

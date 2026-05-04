@@ -1,10 +1,9 @@
 const int kTotalTiles = 50;
 const int kVideoCount = 5;
-const int kMaxActiveControllers = 4;
-const double kPlayThreshold = 0.70;
-const double kPauseThreshold = 0.30;
+const int kMaxActiveControllers = 8;
+const double kPlayThreshold = 0.50;
+const double kPauseThreshold = 0.10;
 
-// Compact portrait card ratio to match the image reference.
 const double kGridTileAspectRatio = 0.82;
 
 const List<String> kVideoAssets = [

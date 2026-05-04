@@ -33,13 +33,17 @@ class VideoControllerService extends ChangeNotifier {
       _evictFarthest(pivot: index);
     }
 
-    final controller = VideoPlayerController.asset(networkUrl);
+    final controller = VideoPlayerController.asset(
+      networkUrl,
+      videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true),
+    );
     _pool[index] = controller;
     _pauseCallbacks[index] = pauseCallback;
 
     try {
       await controller.initialize();
       controller.setLooping(true);
+      controller.setVolume(0);
       debugPrint('✅ VideoControllerService: Initialized controller for index $index');
       return controller;
     } catch (e) {

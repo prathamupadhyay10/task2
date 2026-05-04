@@ -1,8 +1,8 @@
 const int kTotalTiles = 50;
 const int kVideoCount = 5;
 const int kMaxActiveControllers = 8;
-const double kPlayThreshold = 0.50;
-const double kPauseThreshold = 0.10;
+const double kPlayThreshold = 0.15;
+const double kPauseThreshold = 0.05;
 
 const double kGridTileAspectRatio = 0.82;
 
